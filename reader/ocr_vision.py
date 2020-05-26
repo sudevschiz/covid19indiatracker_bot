@@ -1,9 +1,34 @@
 
 import os
-from google.cloud import vision
 import io
-import json
+import pickle
+from google.cloud import vision
 
+
+class CovidNumbers():
+    region_type = 'district'
+    region_name = None
+    stats = {
+        'total': {
+            'confirmed': None,
+            'recovered': None,
+            'deceased': None,
+            'migrated': None,
+            'active': None
+            },
+        'daily': {
+            'confirmed': None,
+            'recovered': None,
+            'deceased': None,
+            'migrated': None,
+            'active': None
+            }
+    }
+
+
+# class Bulletin():
+#     STATE_NAME = 'UP'
+#     NUM_DISTRICTS = 75
 
 def detect_text(path):
     """Detects text in the file."""
@@ -18,12 +43,12 @@ def detect_text(path):
     texts = response.text_annotations
 
     # Save output
-    bas_path = './data/output'
-    out_path = f'{bas_path}{os.path.basename(path)}.json'
+    bas_path = './data/output/'
+    out_path = f'{bas_path}{os.path.splitext(os.path.basename(path))[0]}_response.pickle'
     if not (os.path.isdir(bas_path)):
         os.mkdir(bas_path)
-    with open(out_path, 'w') as jf:
-        json.dump(texts, jf)
+    with open(out_path, 'wb') as jf:
+        pickle.dump(response, jf)
 
     print('Texts:')
 
@@ -44,9 +69,17 @@ def detect_text(path):
 
 def main():
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = "./credentials/visionapi.json"
-    file_path = './data/MP1.jpeg'
-    detect_text(file_path)
+    path = './data/MP1.jpeg'
 
+    # Do OCR
+    detect_text(path)
+
+    # TODO
+    # Plot text with bounding box and display
+    # Extract line by line
+    # Convert Hindi District names to English using fuzzy lookup
+    # Tabulapy?
+    
 
 if __name__ == "__main__":
     main()
