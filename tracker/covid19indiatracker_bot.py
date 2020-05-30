@@ -12,7 +12,7 @@ import urllib3
 from bs4 import BeautifulSoup
 
 # Bot details
-_tokenFile = 'TOKEN'
+_tokenFile = '../credentials/TOKEN'
 logging.basicConfig(filename='covid19indiatracker_bot.log',
                     format='%(asctime)s - %(name)s - \
                     %(levelname)s - %(message)s',
