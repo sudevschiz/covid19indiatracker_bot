@@ -17,7 +17,9 @@ logging.basicConfig(filename='covid19indiatracker_bot.log',
                     format='%(asctime)s - %(name)s - \
                     %(levelname)s - %(message)s',
                     level=logging.INFO)
+
 webPageLink = 'https://www.covid19india.org'
+districts_daiyLink = "https://api.covid19india.org/districts_daily.json"
 MOHFWAPILink = "https://www.mohfw.gov.in/dashboard/data/data.json"
 MOHFWLink = 'https://www.mohfw.gov.in'
 NDMALink = 'https://utility.arcgis.com/usrsvcs/servers/83b36886c90942ab9f67e7a212e515c8/rest/services/Corona/DailyCasesMoHUA/MapServer/0/query?f=json&where=1%3D1&returnGeometry=true&spatialRel=esriSpatialRelIntersects&maxAllowableOffset=9783&geometry=%7B%22xmin%22%3A5009377.085690986%2C%22ymin%22%3A0.000004991888999938965%2C%22xmax%22%3A10018754.171386965%2C%22ymax%22%3A5009377.08570097%2C%22spatialReference%22%3A%7B%22wkid%22%3A102100%7D%7D&geometryType=esriGeometryEnvelope&inSR=102100&outFields=*&outSR=102100&cacheHint=false'
@@ -227,8 +229,9 @@ def advanced(update, context):
     """ advanced command """
     logging.info('Command invoked: advanced')
 
-    message = " Use the keyword 'api' after the commands\n" + \
-              "/mohfw and /comparemohfw for retrieving data directly\n" + \
+    message = "/recon - for value checks in data fields.\n" + \
+              " Use the keyword 'api' after the commands /mohfw and\n" + \
+              "/comparemohfw for retrieving data directly " + \
               " from the MOHFW website rather than the API provided by MOHFW\n"
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
@@ -478,7 +481,7 @@ def mohfwsite(update, context, compare=False):
     """ Compares covid19india.org data with MOHFW website data """
     logging.info('Command invoked: mohfwsite')
     dataSITE_raw = _getSiteData()
-    dataSITE = _getSortedNational(dataSITE_raw, keyBasis='active')[1:]
+    dataSITE = _getSortedNational(dataSITE_raw, keyBasis='active')
     try:
         stateScraped, activeScraped, recoveredScraped, \
                 deathsScraped, confirmedScraped = _getMOHFWData(site=True)
@@ -505,7 +508,7 @@ def mohfwsite(update, context, compare=False):
 
             confirmedMOHFW = 'UNAVBL'
             for i in range(len(stateScraped)):
-                stateMOHFW = stateScraped[i]
+                stateMOHFW = _removeSpecialChars(stateScraped[i])
                 # Check for matching state name in MOHFW database
                 # 1. Handle Telangana misspelling
                 # 2. Handle '#' marks in some state names and cases
@@ -514,8 +517,7 @@ def mohfwsite(update, context, compare=False):
                 if stateMOHFW == stateSITE or \
                    (stateSITE == 'Telangana' and stateMOHFW == 'Telengana') or \
                    (stateSITE == 'Dadra and Nagar Haveli and Daman and Diu' and \
-                    stateMOHFW == 'Dadar Nagar Haveli') or \
-                   (stateSITE == _removeSpecialChars(stateMOHFW)):
+                    stateMOHFW == 'Dadar Nagar Haveli'):
                     activeMOHFW = _removeSpecialChars(activeScraped[i])
                     recoveredMOHFW = _removeSpecialChars(recoveredScraped[i])
                     deathsMOHFW = _removeSpecialChars(deathsScraped[i])
@@ -530,6 +532,7 @@ def mohfwsite(update, context, compare=False):
                     break
 
 
+            stateCode = getStateCode(stateSITE)
             if confirmedMOHFW == 'UNAVBL':
                 confirmedMOHFW = unavblCode
                 confirmed_diff = unavblCode
@@ -557,7 +560,6 @@ def mohfwsite(update, context, compare=False):
                         recovered_diff = int(recoveredMOHFW)
                         deaths_diff = int(deathsMOHFW)
                 # String formatting
-                stateCode = getStateCode(stateSITE)
                 confirmed_diff = leadingPlus.format(confirmed_diff).ljust(chars, ' ')
                 active_diff = leadingPlus.format(active_diff).ljust(chars, ' ')
                 if stateSITE != 'State Unassigned':
@@ -627,6 +629,51 @@ def comparendma(update, context):
     else:
         ndmaapi(update, context, compare=True)
 
+def recon(update, context):
+    """ Checks for some invalid values in data """
+    logging.info('Command invoked: recon')
+    chars = 7
+    data = _getSiteData(statewise=True)
+    messageHeader = ' Districts with invalid values\n' + \
+            '______________________________\n\n' + \
+            'ST|DSTRICT|CNFRD..|ACTIV..|\n' + \
+            '__________|RCVRD..|DECSD..|\n' + \
+            '--|-------|-------|-------|\n'
+    message = ''
+    messageUn = ''
+
+    for stateDict in data:
+        stateCode = stateDict['statecode']
+        for districtDict in stateDict['districtData']:
+            districtName = districtDict['district']
+            active = districtDict['active']
+            confirmed = districtDict['confirmed']
+            recovered = districtDict['recovered']
+            deceased = districtDict['deceased']
+
+            if districtName == 'Unknown':
+                if (confirmed != 0) or (recovered != 0) or (deceased != 0):
+                    messageUn += stateCode + '|' + \
+                            districtName[0:chars].ljust(chars, '.') + '|' + \
+                            str(confirmed).ljust(chars, ' ') + '|' + \
+                            str(active).ljust(chars, ' ') + '|\n__________|' + \
+                            str(recovered).ljust(chars, ' ') + '|' + \
+                            str(deceased).ljust(chars, ' ') + '|\n'
+            else:
+                if (confirmed < 0) or (active < 0) or \
+                   (recovered < 0) or (deceased < 0):
+                    message += stateCode + '|' + \
+                            districtName[0:chars].ljust(chars, '.') + '|' + \
+                            str(confirmed).ljust(chars, ' ') + '|' + \
+                            str(active).ljust(chars, ' ') + '|\n__________|' + \
+                            str(recovered).ljust(chars, ' ') + '|' + \
+                            str(deceased).ljust(chars, ' ') + '|\n'
+
+    messageUn += '--|-------|-------|-------|\n'
+    message = '```' + messageHeader + messageUn + message + '```'
+    context.bot.send_message(chat_id=update.effective_chat.id, text=message,
+                             parse_mode=ParseMode.MARKDOWN,
+                             disable_web_page_preview=True)
 
 def main():
     logging.info('covid19india_bot started')
@@ -644,6 +691,8 @@ def main():
 
     updater.dispatcher.add_handler(CommandHandler('ndma', ndma))
     updater.dispatcher.add_handler(CommandHandler('comparendma', comparendma))
+
+    updater.dispatcher.add_handler(CommandHandler('recon', recon))
 
     updater.dispatcher.add_handler(CommandHandler('advanced', advanced))
 
