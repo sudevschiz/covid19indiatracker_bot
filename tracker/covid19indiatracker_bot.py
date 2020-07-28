@@ -20,11 +20,13 @@ logging.basicConfig(filename='covid19indiatracker_bot.log',
 
 webPageLink = 'https://www.covid19india.org'
 districts_daiyLink = "https://api.covid19india.org/districts_daily.json"
-MOHFWAPILink = "https://www.mohfw.gov.in/dashboard/data/data.json"
+MOHFWAPILink = "https://www.mohfw.gov.in/data/datanew.json"
 MOHFWLink = 'https://www.mohfw.gov.in'
 NDMALink = 'https://utility.arcgis.com/usrsvcs/servers/83b36886c90942ab9f67e7a212e515c8/rest/services/Corona/DailyCasesMoHUA/MapServer/0/query?f=json&where=1%3D1&returnGeometry=true&spatialRel=esriSpatialRelIntersects&maxAllowableOffset=9783&geometry=%7B%22xmin%22%3A5009377.085690986%2C%22ymin%22%3A0.000004991888999938965%2C%22xmax%22%3A10018754.171386965%2C%22ymax%22%3A5009377.08570097%2C%22spatialReference%22%3A%7B%22wkid%22%3A102100%7D%7D&geometryType=esriGeometryEnvelope&inSR=102100&outFields=*&outSR=102100&cacheHint=false'
 _stateNameCodeDict = {}
 unavblCode = 'UNAVBL'.ljust(6, ' ')
+zeroCode = ' 0'.ljust(6, ' ')
+mohfwDefaultSource = 'api'  # Use 'api' or 'site'
 
 
 def _getSiteData(statewise=False):
@@ -230,8 +232,8 @@ def advanced(update, context):
     logging.info('Command invoked: advanced')
 
     message = "/recon - for value checks in data fields.\n" + \
-              " Use the keyword 'api' after the commands /mohfw and\n" + \
-              "/comparemohfw for retrieving data directly " + \
+              " Use the keyword 'api' or 'site' after the commands" + \
+              " /mohfw and /comparemohfw for retrieving data directly" + \
               " from the MOHFW website rather than the API provided by MOHFW\n"
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
@@ -290,11 +292,12 @@ def mohfwapi(update, context, compare=False):
     dataMOHFW = _getMOHFWData()
     message = '\nMOHFW Reports (API): ' \
         + '\n\n' \
-        + 'REGION'.ljust(8, '.') + '|'\
-        + 'CNFRD'.ljust(6, '.') + '|'\
+        + 'ST' + '|'\
+        + 'ACTIV'.ljust(6, '.') + '|'\
         + 'RCVRD'.ljust(6, '.') + '|'\
-        + 'DECSD'.ljust(6, '.') + '\n'\
-        + '--------|------|------|------\n'
+        + 'DECSD'.ljust(6, '.') + '|'\
+        + 'CNFRD'.ljust(6, '.') + '\n'\
+        + '--|------|------|------|------\n'
     chars = 6
 
     try:
@@ -318,29 +321,31 @@ def mohfwapi(update, context, compare=False):
                 # 1. Handle Telangana misspelling
                 if stateMOHFW == stateSITE or \
                    (stateSITE == 'Telangana' and stateMOHFW == 'Telengana'):
-                    confirmedMOHFW = stateDict['positive']
-                    recoveredMOHFW = stateDict['cured']
-                    deathsMOHFW = stateDict['death']
+                    activeMOHFW = stateDict['new_active']
+                    recoveredMOHFW = stateDict['new_cured']
+                    deathsMOHFW = stateDict['new_death']
+                    confirmedMOHFW = stateDict['new_positive']
+                    break
+
+            stateCode = getStateCode(stateSITE)
             if confirmedMOHFW == 'UNAVBL':
-                confirmedMOHFW = 'UNAVBL'.ljust(chars, ' ')
-                confirmed_diff = 'UNAVBL'.ljust(chars, ' ')
-                active_diff = 'UNAVBL'.ljust(chars, ' ')
-                recovered_diff = 'UNAVBL'.ljust(chars, ' ')
-                deaths_diff = 'UNAVBL'.ljust(chars, ' ')
-                activeMOHFW = 'UNAVBL'.ljust(chars, ' ')
+                confirmedMOHFW = unavblCode
+                confirmed_diff = unavblCode
+                active_diff = unavblCode
+                recovered_diff = unavblCode
+                deaths_diff = unavblCode
+                activeMOHFW = unavblCode
             else:
                 if compare == True:
                     leadingPlus = '{0:+}'
                     confirmed_diff = int(confirmedMOHFW) - confirmedSITE
-                    active_diff = int(confirmedMOHFW) - int(recoveredMOHFW) - \
-                        int(deathsMOHFW) - activeSITE
+                    active_diff = int(activeMOHFW) - activeSITE
                     recovered_diff = int(recoveredMOHFW) - recoveredSITE
                     deaths_diff = int(deathsMOHFW) - deathsSITE
                 else:
                     leadingPlus = '{0}'
                     confirmed_diff = int(confirmedMOHFW)
-                    active_diff = int(confirmedMOHFW) - int(recoveredMOHFW) - \
-                        int(deathsMOHFW)
+                    active_diff = int(activeMOHFW)
                     recovered_diff = int(recoveredMOHFW)
                     deaths_diff = int(deathsMOHFW)
                 # String formatting
@@ -350,18 +355,18 @@ def mohfwapi(update, context, compare=False):
                 deaths_diff = leadingPlus.format(deaths_diff).ljust(chars, ' ')
                 # Check for +0 and change to _0
                 if confirmed_diff.strip() == '+0':
-                    confirmed_diff = ' 0'.ljust(chars, ' ')
+                    confirmed_diff = zeroCode
                 if active_diff.strip() == '+0':
-                    active_diff = ' 0'.ljust(chars, ' ')
+                    active_diff = zeroCode
                 if recovered_diff.strip() == '+0':
-                    recovered_diff = ' 0'.ljust(chars, ' ')
+                    recovered_diff = zeroCode
                 if deaths_diff.strip() == '+0':
-                    deaths_diff = ' 0'.ljust(chars, ' ')
+                    deaths_diff = zeroCode
 
             message = message + \
-                stateSITE[0:chars+2].ljust(chars+2, '.') + \
-                '|' + confirmed_diff + '|' + recovered_diff + \
-                '|' + deaths_diff + '\n'
+                stateCode.ljust(2, '.') + \
+                '|' + active_diff + '|' + recovered_diff + \
+                '|' + deaths_diff + '|' + confirmed_diff + '\n'
 
         message = '```' + message + '```'
 
@@ -455,13 +460,13 @@ def ndmaapi(update, context, compare=False):
                 deaths_diff = leadingPlus.format(deaths_diff).ljust(chars, ' ')
                 # Check for +0 and change to _0
                 if confirmed_diff.strip() == '+0':
-                    confirmed_diff = ' 0'.ljust(chars, ' ')
+                    confirmed_diff = zeroCode
                 if active_diff.strip() == '+0':
-                    active_diff = ' 0'.ljust(chars, ' ')
+                    active_diff = zeroCode
                 if recovered_diff.strip() == '+0':
-                    recovered_diff = ' 0'.ljust(chars, ' ')
+                    recovered_diff = zeroCode
                 if deaths_diff.strip() == '+0':
-                    deaths_diff = ' 0'.ljust(chars, ' ')
+                    deaths_diff = zeroCode
 
             message = message + \
                 stateSITE[0:chars+2].ljust(chars+2, '.') + \
@@ -485,7 +490,7 @@ def mohfwsite(update, context, compare=False):
     try:
         stateScraped, activeScraped, recoveredScraped, \
                 deathsScraped, confirmedScraped = _getMOHFWData(site=True)
-        message = '\nMOHFW Site Reports: ' \
+        message = '\nMOHFW Reports (Site): ' \
             + '\n\n' \
             + 'ST' + '|'\
             + 'ACTIV'.ljust(6, '.') + '|'\
@@ -567,13 +572,13 @@ def mohfwsite(update, context, compare=False):
                     deaths_diff = leadingPlus.format(deaths_diff).ljust(chars, ' ')
                 # Check for +0 and change to _0
                 if confirmed_diff.strip() == '+0':
-                    confirmed_diff = ' 0'.ljust(chars, ' ')
+                    confirmed_diff = zeroCode
                 if active_diff.strip() == '+0':
-                    active_diff = ' 0'.ljust(chars, ' ')
+                    active_diff = zeroCode
                 if recovered_diff.strip() == '+0':
-                    recovered_diff = ' 0'.ljust(chars, ' ')
+                    recovered_diff = zeroCode
                 if deaths_diff.strip() == '+0':
-                    deaths_diff = ' 0'.ljust(chars, ' ')
+                    deaths_diff = zeroCode
 
             message = message + \
                 stateCode.ljust(2, '.') + \
@@ -591,23 +596,39 @@ def mohfwsite(update, context, compare=False):
 
 def mohfw(update, context):
     """ Displays data from MOHFW """
-    """ Data retrieved from SITE by default unless 'api' is specified """
+    """ Data retrieved using mohfwDefaultSource variable unless keyword is specified """
     logging.info('Command invoked: mohfw')
     if update.message.text.upper()  == '/MOHFW API':
         logging.info('api keyword provided')
         mohfwapi(update, context, compare=False)
-    else:
+    elif update.message.text.upper() == '/MOHFW SITE':
+        logging.info('site keyword provided')
         mohfwsite(update, context, compare=False)
+    else:
+        if mohfwDefaultSource == 'api':
+            logging.info('api source used by default')
+            mohfwapi(update, context, compare=False)
+        else:
+            logging.info('site source used by default')
+            mohfwsite(update, context, compare=False)
 
 def comparemohfw(update, context):
     """ Displays difference in data between MOHFW and covid19india.org """
-    """ Data retrieved from SITE by default unless 'api' is specified """
+    """ Data retrieved using mohfwDefaultSource variable unless keyword is specified """
     logging.info('Command invoked: comparemohfw')
     if update.message.text.upper()  == '/COMPAREMOHFW API':
         logging.info('api keyword provided')
         mohfwapi(update, context, compare=True)
-    else:
+    elif update.message.text.upper() == '/COMPAREMOHFW SITE':
+        logging.info('site keyword provided')
         mohfwsite(update, context, compare=True)
+    else:
+        if mohfwDefaultSource == 'api':
+            logging.info('api source used by default')
+            mohfwapi(update, context, compare=True)
+        else:
+            logging.info('site source used by default')
+            mohfwsite(update, context, compare=True)
 
 def ndma(update, context):
     """ Displays data from NDMA """
