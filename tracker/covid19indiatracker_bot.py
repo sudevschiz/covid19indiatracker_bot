@@ -371,7 +371,8 @@ def mohfwapi(update, context, compare=False):
         message = '```' + message + '```'
 
     except TypeError as e:
-        message = str(e)
+        message = 'Data is unavailable. Please try later.'
+        raise
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=message,
                              parse_mode=ParseMode.MARKDOWN,
@@ -477,6 +478,7 @@ def ndmaapi(update, context, compare=False):
 
     except TypeError:
         message = 'Data is unavailable. Please try later.'
+        raise
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=message,
                              parse_mode=ParseMode.MARKDOWN,
@@ -589,6 +591,7 @@ def mohfwsite(update, context, compare=False):
 
     except TypeError:
         message = 'Data is unavailable. Please try later.'
+        raise
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=message,
                              parse_mode=ParseMode.MARKDOWN,
