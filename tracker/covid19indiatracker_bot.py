@@ -370,8 +370,8 @@ def mohfwapi(update, context, compare=False):
 
         message = '```' + message + '```'
 
-    except TypeError:
-        message = 'Data is unavailable. Please try later.'
+    except TypeError as e:
+        message = str(e)
 
     context.bot.send_message(chat_id=update.effective_chat.id, text=message,
                              parse_mode=ParseMode.MARKDOWN,
